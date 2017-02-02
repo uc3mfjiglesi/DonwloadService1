@@ -7,10 +7,14 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Environment;
 import android.os.IBinder;
+import android.util.Log;
 
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -23,6 +27,8 @@ import es.cice.donwloadservice1.R;
 import static android.provider.ContactsContract.CommonDataKinds.Website.URL;
 
 public class DownloadIntentService extends IntentService {
+
+    public static final String TAG="DownloadIntentService";
 
     public static final String URL_EXTRA="url";
 
@@ -60,11 +66,19 @@ public class DownloadIntentService extends IntentService {
     protected void onHandleIntent(Intent intent) {
         String urlStr=intent.getStringExtra(URL_EXTRA);
         OutputStream out=null;
+        File file=null;
         try{
             URL url=new URL(urlStr);
             URLConnection con=url.openConnection();
             InputStream in=con.getInputStream();
-            out=openFileOutput("download",MODE_PRIVATE);
+            file=openOutputStream(url);
+            if(file==null){
+                Log.d(TAG,"No se pudo acceder al espacio de almacenamiento externo...");
+                file=Environment.getDataDirectory();
+                out=openFileOutput(url.toString().replace("/","_"),MODE_PRIVATE);
+            }else{
+                out=new FileOutputStream(file);
+            }
 
             byte[] buffer=new byte[1024];
             int bytesLeidos;
@@ -78,14 +92,14 @@ public class DownloadIntentService extends IntentService {
             e.printStackTrace();
         }finally{
             Notification.Builder builder=new Notification.Builder(this);
-            File file=Environment.getDataDirectory();
+
             builder
                     .setSmallIcon(R.drawable.ic_download)
                     .setContentTitle("download finished")
                     .setContentText("descarga terminada en " +
                     file.getAbsolutePath());
 
-
+            Log.d(TAG,file.getAbsolutePath());
             Notification notification=builder.build();
             NotificationManager nm= (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
             nm.notify(11111,notification);
@@ -95,5 +109,17 @@ public class DownloadIntentService extends IntentService {
                 e.printStackTrace();
             }
         }
+    }
+
+    private File openOutputStream(URL url) {
+        Uri uri= Uri.parse(url.toString());
+        if(Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED)) {
+            File imageAndMovieDir = Environment.getExternalStoragePublicDirectory(
+                    Environment.DIRECTORY_DCIM + "/MisImagenes");
+            if(!imageAndMovieDir.exists())
+                imageAndMovieDir.mkdir();
+            return new File(imageAndMovieDir,uri.getLastPathSegment());
+        }
+        return null;
     }
 }
